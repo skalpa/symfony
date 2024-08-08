@@ -30,7 +30,40 @@ final class UnionType extends Type implements CompositeTypeInterface
     /**
      * @use CompositeTypeTrait<T>
      */
-    use CompositeTypeTrait;
+    use CompositeTypeTrait {
+        __construct as private compositeConstruct;
+    }
+
+    public function __construct(Type ...$types)
+    {
+        if (\count($types) < 2) {
+            throw new InvalidArgumentException(\sprintf('"%s" expects at least 2 types.', self::class));
+        }
+
+        foreach ($types as $t) {
+            if ($t instanceof self || \in_array($t->getTypeIdentifier(), [TypeIdentifier::NEVER, TypeIdentifier::VOID], true)) {
+                throw new InvalidArgumentException(\sprintf('Cannot set "%s" as a "%s" part.', $t, self::class));
+            }
+        }
+        // Sort intersections first, then classes, then builtins
+        $prefix = function (Type $t): string {
+            return match ($t::class) {
+                IntersectionType::class => '!!',
+                ObjectType::class => '!',
+                default => '',
+            }.$t;
+        };
+        usort($types, fn (Type $a, Type $b): int => $prefix($a) <=> $prefix($b));
+
+        $this->compositeConstruct(...$types);
+    }
+
+    public function getTypeIdentifier(): TypeIdentifier
+    {
+        $identifiers = array_values(array_unique(array_map(fn($t) => $t->getTypeIdentifier(), $this->getTypes())));
+
+        return 1 === count($identifiers) ? $identifiers[0] : TypeIdentifier::MIXED;
+    }
 
     private readonly TypeIdentifier $typeIdentifier;
     private readonly bool $isNullable;

@@ -30,7 +30,31 @@ final class IntersectionType extends Type implements CompositeTypeInterface
     /**
      * @use CompositeTypeTrait<T>
      */
-    use CompositeTypeTrait;
+    use CompositeTypeTrait {
+        __construct as private compositeConstruct;
+    }
+
+    public function __construct(Type ...$types)
+    {
+        if (\count($types) < 2) {
+            throw new InvalidArgumentException(\sprintf('"%s" expects at least 2 types.', self::class));
+        }
+        // Only accept non-composite object types, except the builtin 'object'
+        foreach ($types as $t) {
+            if ($t instanceof CompositeTypeInterface || $t instanceof BuiltinType || TypeIdentifier::OBJECT !== $t->getTypeIdentifier()) {
+                throw new InvalidArgumentException(\sprintf('Cannot set type "%s" as a "%s" part.', $t, self::class));
+            }
+        }
+        // All subtypes are class names and are sorted alphabetically
+        usort($types, fn (Type $a, Type $b): int => (string) $a <=> (string) $b);
+
+        $this->compositeConstruct(...$types);
+    }
+
+    public function getTypeIdentifier(): TypeIdentifier
+    {
+        return TypeIdentifier::OBJECT;
+    }
 
     /**
      * @param list<T> $types
