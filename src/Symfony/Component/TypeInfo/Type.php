@@ -11,31 +11,37 @@
 
 namespace Symfony\Component\TypeInfo;
 
-use Symfony\Component\TypeInfo\Exception\LogicException;
-use Symfony\Component\TypeInfo\Type\BuiltinType;
-use Symfony\Component\TypeInfo\Type\ObjectType;
+use Symfony\Component\TypeInfo\Type\TypeInterface;
 
 /**
  * @author Mathias Arlaud <mathias.arlaud@gmail.com>
  * @author Baptiste Leduc <baptiste.leduc@gmail.com>
  *
+ * @template TPrimitive of TypeIdentifier
+ * @template TVariables of Type
+ *
  * @experimental
  */
-abstract class Type implements \Stringable
+abstract class Type implements TypeInterface, \Stringable
 {
     use TypeFactoryTrait;
 
-    abstract public function getBaseType(): BuiltinType|ObjectType;
+    public function isNullable(): bool
+    {
+        return false;
+    }
 
-    /**
-     * Return the simplest primitive type that this type will satisfy.
-     */
-    abstract public function getTypeIdentifier(): TypeIdentifier;
+    public function asNonNullable(): self
+    {
+        return $this;
+    }
 
-    /**
-     * @param TypeIdentifier|class-string $subject
-     */
-    abstract public function isA(TypeIdentifier|string $subject): bool;
+    abstract public function accepts(Type $type): bool;
+
+    final public function acceptsValue(mixed $value): bool
+    {
+        return $this->accepts(self::from($value));
+    }
 
     /**
      * @param callable(Type): bool $callable
@@ -45,23 +51,18 @@ abstract class Type implements \Stringable
         return $callable($this);
     }
 
-    public function asNonNullable(): self
+    final public function isA(Type $type): bool
     {
-        return $this;
-    }
-
-    public function isNullable(): bool
-    {
-        return false;
+        return $type->accepts($this);
     }
 
     /**
-     * Graceful fallback for unexisting methods.
-     *
-     * @param list<mixed> $arguments
+     * @param TPrimitive $typeIdentifier
+     * @param TVariables ...$variableTypes
      */
-    public function __call(string $method, array $arguments): mixed
+    protected function __construct(TypeIdentifier $typeIdentifier, Type ...$variableTypes)
     {
-        throw new LogicException(\sprintf('Cannot call "%s" on "%s" type.', $method, $this));
+        $this->typeIdentifier = $typeIdentifier;
+        $this->variableTypes = array_values($variableTypes);
     }
 }

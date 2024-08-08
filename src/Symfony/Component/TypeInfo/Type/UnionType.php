@@ -25,49 +25,8 @@ use Symfony\Component\TypeInfo\TypeIdentifier;
  *
  * @experimental
  */
-final class UnionType extends Type implements CompositeTypeInterface
+final class UnionType extends CompositeType
 {
-    /**
-     * @use CompositeTypeTrait<T>
-     */
-    use CompositeTypeTrait {
-        __construct as private compositeConstruct;
-    }
-
-    public function __construct(Type ...$types)
-    {
-        if (\count($types) < 2) {
-            throw new InvalidArgumentException(\sprintf('"%s" expects at least 2 types.', self::class));
-        }
-
-        foreach ($types as $t) {
-            if ($t instanceof self || \in_array($t->getTypeIdentifier(), [TypeIdentifier::NEVER, TypeIdentifier::VOID], true)) {
-                throw new InvalidArgumentException(\sprintf('Cannot set "%s" as a "%s" part.', $t, self::class));
-            }
-        }
-        // Sort intersections first, then classes, then builtins
-        $prefix = function (Type $t): string {
-            return match ($t::class) {
-                IntersectionType::class => '!!',
-                ObjectType::class => '!',
-                default => '',
-            }.$t;
-        };
-        usort($types, fn (Type $a, Type $b): int => $prefix($a) <=> $prefix($b));
-
-        $this->compositeConstruct(...$types);
-    }
-
-    public function getTypeIdentifier(): TypeIdentifier
-    {
-        $identifiers = array_values(array_unique(array_map(fn($t) => $t->getTypeIdentifier(), $this->getTypes())));
-
-        return 1 === count($identifiers) ? $identifiers[0] : TypeIdentifier::MIXED;
-    }
-
-    private readonly TypeIdentifier $typeIdentifier;
-    private readonly bool $isNullable;
-
     public function __construct(Type ...$types)
     {
         if (\count($types) < 2) {
@@ -79,7 +38,7 @@ final class UnionType extends Type implements CompositeTypeInterface
         $hasObject = false;
         $identifiers = [];
         foreach ($types as $t) {
-            if ($t instanceof self) {
+            if ($t instanceof CompositeTypeInterface && !$t instanceof IntersectionType) {
                 throw new InvalidArgumentException(\sprintf('Cannot set "%s" as a "%s" part.', $t, self::class));
             }
             if ($t->getTypeIdentifier()->isStandalone()) {
@@ -88,8 +47,8 @@ final class UnionType extends Type implements CompositeTypeInterface
             if (TypeIdentifier::NULL === $t->getTypeIdentifier()) {
                 $nullable = true;
             }
-            $hasClassType = $hasClassType || !$t instanceof BuiltinType && TypeIdentifier::OBJECT === $t->getTypeIdentifier();
-            $hasObject = $hasObject || $t instanceof BuiltinType && TypeIdentifier::OBJECT === $t->getTypeIdentifier();
+            $hasClassType = $hasClassType || TypeIdentifier::OBJECT === $t->getTypeIdentifier() && '' === $t->getName();
+            $hasObject = $hasObject || TypeIdentifier::OBJECT === $t->getTypeIdentifier() && '' !== $t->getName();
             $identifiers[$t->getTypeIdentifier()->name] = $t->getTypeIdentifier();
         }
         if ($hasClassType && $hasObject) {
@@ -106,88 +65,9 @@ final class UnionType extends Type implements CompositeTypeInterface
                 : new InvalidArgumentException('Duplicate boolean type is redundant.');
         }
 
-        $this->typeIdentifier = 1 === count($identifiers) ? current($identifiers) : TypeIdentifier::MIXED;
-        $this->isNullable = $nullable;
-        $this->types = $this->sortSubtypesForRendering(...$types);
-    }
+        $typeIdentifier = 1 === count($identifiers) ? current($identifiers) : TypeIdentifier::MIXED;
 
-    public function getTypeIdentifier(): TypeIdentifier
-    {
-        return $this->typeIdentifier;
-    }
-
-    /**
-     * @param callable(T): bool $callable
-     */
-    public function is(callable $callable): bool
-    {
-        return $this->atLeastOneTypeIs($callable);
-    }
-
-    /**
-     * @throws LogicException
-     */
-    public function getBaseType(): BuiltinType|ObjectType
-    {
-        $nonNullableType = $this->asNonNullable();
-        if (!$nonNullableType instanceof self) {
-            return $nonNullableType->getBaseType();
-        }
-
-        throw new LogicException(\sprintf('Cannot get base type on "%s" compound type.', $this));
-    }
-
-    /**
-     * Whether this union represents a nullable type.
-     *
-     * A union is nullable if it contains "null" (as it may not contain unions or mixed).
-     */
-    public function isNullable(): bool
-    {
-        return $this->isNullable;
-    }
-
-    public function asNonNullable(): Type
-    {
-        if (!$this->isNullable) {
-            return $this;
-        }
-        $nonNullableTypes = $this->filter(fn (Type $t): bool => TypeIdentifier::NULL !== $t->getTypeIdentifier());
-
-        return 1 < \count($nonNullableTypes) ? new self(...$nonNullableTypes) : $nonNullableTypes[0];
-    }
-
-    public function __toString(): string
-    {
-        $string = '';
-        $glue = '';
-
-        foreach ($this->types as $t) {
-            $string .= $glue.($t instanceof IntersectionType ? '('.((string) $t).')' : ((string) $t));
-            $glue = '|';
-        }
-
-        return $string;
-    }
-
-    /**
-     * Proxies all method calls to the original non-nullable type.
-     *
-     * @param list<mixed> $arguments
-     */
-    public function __call(string $method, array $arguments): mixed
-    {
-        $nonNullableType = $this->asNonNullable();
-
-        if (!$nonNullableType instanceof self) {
-            if (!method_exists($nonNullableType, $method)) {
-                throw new LogicException(\sprintf('Method "%s" doesn\'t exist on "%s" type.', $method, $nonNullableType));
-            }
-
-            return $nonNullableType->{$method}(...$arguments);
-        }
-
-        throw new LogicException(\sprintf('Cannot call "%s" on "%s" compound type.', $method, $this));
+        parent::__construct($typeIdentifier, $nullable, '|', CompositeMatchMode::ANY, ...$this->sortSubtypesForRendering(...$types));
     }
 
     /**

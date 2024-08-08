@@ -25,37 +25,8 @@ use Symfony\Component\TypeInfo\TypeIdentifier;
  *
  * @experimental
  */
-final class IntersectionType extends Type implements CompositeTypeInterface
+final class IntersectionType extends CompositeType
 {
-    /**
-     * @use CompositeTypeTrait<T>
-     */
-    use CompositeTypeTrait {
-        __construct as private compositeConstruct;
-    }
-
-    public function __construct(Type ...$types)
-    {
-        if (\count($types) < 2) {
-            throw new InvalidArgumentException(\sprintf('"%s" expects at least 2 types.', self::class));
-        }
-        // Only accept non-composite object types, except the builtin 'object'
-        foreach ($types as $t) {
-            if ($t instanceof CompositeTypeInterface || $t instanceof BuiltinType || TypeIdentifier::OBJECT !== $t->getTypeIdentifier()) {
-                throw new InvalidArgumentException(\sprintf('Cannot set type "%s" as a "%s" part.', $t, self::class));
-            }
-        }
-        // All subtypes are class names and are sorted alphabetically
-        usort($types, fn (Type $a, Type $b): int => (string) $a <=> (string) $b);
-
-        $this->compositeConstruct(...$types);
-    }
-
-    public function getTypeIdentifier(): TypeIdentifier
-    {
-        return TypeIdentifier::OBJECT;
-    }
-
     /**
      * @param list<T> $types
      */
@@ -64,46 +35,15 @@ final class IntersectionType extends Type implements CompositeTypeInterface
         if (\count($types) < 2) {
             throw new InvalidArgumentException(\sprintf('"%s" expects at least 2 types.', self::class));
         }
-        // Only accept non-composite object types, except the builtin 'object'
+        // Only accept named object types
         foreach ($types as $t) {
-            if ($t instanceof CompositeTypeInterface || $t instanceof BuiltinType || TypeIdentifier::OBJECT !== $t->getTypeIdentifier()) {
-                throw new InvalidArgumentException(\sprintf('Cannot set type "%s" as a "%s" part.', $t, self::class));
+            if (TypeIdentifier::OBJECT !== $t->getTypeIdentifier() && '' === $t->getName()) {
+                throw new InvalidArgumentException(\sprintf('Intersections must be made of named object types, got "%s".', (string) $t));
             }
         }
-        // All subtypes are class names and are sorted alphabetically
-        usort($types, fn (Type $a, Type $b): int => (string) $a <=> (string) $b);
+        // All subtypes are sorted alphabetically
+        usort($types, fn (Type $a, Type $b): int => $a->getName() <=> $b->getName());
 
-        $this->types = array_values(array_unique($types));
-    }
-
-    public function getTypeIdentifier(): TypeIdentifier
-    {
-        return TypeIdentifier::OBJECT;
-    }
-
-    public function is(callable $callable): bool
-    {
-        return $this->everyTypeIs($callable);
-    }
-
-    public function __toString(): string
-    {
-        $string = '';
-        $glue = '';
-
-        foreach ($this->types as $t) {
-            $string .= $glue.($t instanceof UnionType ? '('.((string) $t).')' : ((string) $t));
-            $glue = '&';
-        }
-
-        return $string;
-    }
-
-    /**
-     * @throws LogicException
-     */
-    public function getBaseType(): BuiltinType|ObjectType
-    {
-        throw new LogicException(\sprintf('Cannot get base type on "%s" compound type.', $this));
+        parent::__construct(TypeIdentifier::OBJECT, false, '&', CompositeMatchMode::ALL, ...array_values(array_unique($types)));
     }
 }

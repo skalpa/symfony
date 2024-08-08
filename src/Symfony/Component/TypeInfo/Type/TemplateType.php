@@ -23,7 +23,7 @@ use Symfony\Component\TypeInfo\TypeIdentifier;
  *
  * @experimental
  */
-final class TemplateType extends Type
+final class TemplateType extends Type implements WrappingTypeInterface
 {
     public function __construct(
         private readonly string $name,
@@ -36,11 +36,6 @@ final class TemplateType extends Type
         return $this->getBound()->getTypeIdentifier();
     }
 
-    public function getBaseType(): BuiltinType|ObjectType
-    {
-        throw new LogicException(\sprintf('Cannot get base type on "%s" template type.', $this));
-    }
-
     public function isA(TypeIdentifier|string $subject): bool
     {
         return false;
@@ -51,7 +46,7 @@ final class TemplateType extends Type
         return $this->name;
     }
 
-    public function getBound(): Type
+    public function getWrappedType(): Type
     {
         return $this->bound;
     }

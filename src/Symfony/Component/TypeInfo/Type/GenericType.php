@@ -26,7 +26,7 @@ use Symfony\Component\TypeInfo\TypeIdentifier;
  *
  * @experimental
  */
-final class GenericType extends Type
+final class GenericType extends Type implements WrappingTypeInterface
 {
     /**
      * @var list<Type>
@@ -45,25 +45,20 @@ final class GenericType extends Type
 
     public function getTypeIdentifier(): TypeIdentifier
     {
-        return $this->getType()->getTypeIdentifier();
-    }
-
-    public function getBaseType(): BuiltinType|ObjectType
-    {
-        return $this->getType();
+        return $this->getWrappedType()->getTypeIdentifier();
     }
 
     /**
      * @return T
      */
-    public function getType(): BuiltinType|ObjectType
+    public function getWrappedType(): BuiltinType|ObjectType
     {
         return $this->type;
     }
 
     public function isA(TypeIdentifier|string $subject): bool
     {
-        return $this->getType()->isA($subject);
+        return $this->getWrappedType()->isA($subject);
     }
 
     /**
@@ -86,15 +81,5 @@ final class GenericType extends Type
         }
 
         return $typeString.'<'.$variableTypesString.'>';
-    }
-
-    /**
-     * Proxies all method calls to the original type.
-     *
-     * @param list<mixed> $arguments
-     */
-    public function __call(string $method, array $arguments): mixed
-    {
-        return $this->type->{$method}(...$arguments);
     }
 }

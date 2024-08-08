@@ -11,16 +11,37 @@
 
 namespace Symfony\Component\TypeInfo\Type;
 
+use Symfony\Component\TypeInfo\TypeIdentifier;
+
 /**
  * @author Mathias Arlaud <mathias.arlaud@gmail.com>
  * @author Baptiste Leduc <baptiste.leduc@gmail.com>
  *
- * @template T of class-string<\UnitEnum>
+ * @template T of class-string<\BackedEnum>
+ * @template U of BuiltinType<TypeIdentifier::INT>|BuiltinType<TypeIdentifier::STRING>
  *
- * @extends ObjectType<T>
+ * @extends EnumType<T>
  *
  * @experimental
  */
-class EnumType extends ObjectType
+final class EnumType extends ObjectType
 {
+    /**
+     * @param T $className
+     * @param U $backingType
+     */
+    public function __construct(
+        string $className,
+        private readonly BuiltinType $backingType,
+    ) {
+        parent::__construct($className);
+    }
+
+    /**
+     * @return U
+     */
+    public function getBackingType(): BuiltinType
+    {
+        return $this->backingType;
+    }
 }

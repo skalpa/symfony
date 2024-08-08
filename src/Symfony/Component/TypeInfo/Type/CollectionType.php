@@ -27,45 +27,45 @@ use Symfony\Component\TypeInfo\TypeIdentifier;
  *
  * @experimental
  */
-final class CollectionType extends Type
+final class CollectionType extends Type implements AtomicTypeInterface
 {
+    /**
+     * @var class-string|'array'|'iterable'
+     */
+    private readonly string $name;
+
     /**
      * @param T $type
      */
     public function __construct(
-        private readonly BuiltinType|ObjectType|GenericType $type,
+        TypeIdentifier|string $type,
         private readonly bool $isList = false,
+        private readonly bool $allowEmpty = true,
+        Type ...$variableTypes,
     ) {
-        if ($this->isList()) {
-            $keyType = $this->getCollectionKeyType();
+        if ('' === $type || $type instanceof TypeIdentifier && !\in_array($type, [TypeIdentifier::ARRAY, TypeIdentifier::ITERABLE], true)) {
+            throw new InvalidArgumentException(\sprintf('Invalid collection type. Expected array,iterable or class-string, got "%s".', $type->value));
+        }
+        parent::__construct(is_string($type) ? TypeIdentifier::OBJECT : $type, ...$variableTypes);
 
-            if (!$keyType instanceof BuiltinType || TypeIdentifier::INT !== $keyType->getTypeIdentifier()) {
-                throw new InvalidArgumentException(\sprintf('"%s" is not a valid list key type.', (string) $keyType));
+        if (!$isList && 2 <= count($variableTypes)) {
+            $keyType = $variableTypes[0];
+            $isValid =
+                ($isList && $keyType instanceof BuiltinType && TypeIdentifier::INT === $keyType->getTypeIdentifier()) ||
+                ($keyType instanceof BuiltinType && \in_array($keyType->getTypeIdentifier(), [TypeIdentifier::INT, TypeIdentifier::STRING], true)) ||
+                ($keyType instanceof UnionType && 2 === count($keyType->getTypes()) && 'int|string' === (string) $keyType)
+            ;
+            if (!$isValid) {
+                $msg = '"%s" is not a valid '.($isList ? 'list' : 'collection').' key type';
+                throw new InvalidArgumentException(\sprintf($msg, (string) $keyType));
             }
         }
+        $this->name = is_string($type) ? $type : $type->value;
     }
 
-    public function getTypeIdentifier(): TypeIdentifier
+    public function getName(): string
     {
-        return $this->getType()->getTypeIdentifier();
-    }
-
-    public function getBaseType(): BuiltinType|ObjectType
-    {
-        return $this->getType()->getBaseType();
-    }
-
-    /**
-     * @return T
-     */
-    public function getType(): BuiltinType|ObjectType|GenericType
-    {
-        return $this->type;
-    }
-
-    public function isA(TypeIdentifier|string $subject): bool
-    {
-        return $this->getType()->isA($subject);
+        return $this->name;
     }
 
     public function isList(): bool
@@ -73,48 +73,35 @@ final class CollectionType extends Type
         return $this->isList;
     }
 
-    public function getCollectionKeyType(): Type
+    public function canBeEmpty(): bool
     {
-        $defaultCollectionKeyType = self::union(self::int(), self::string());
+        return $this->allowEmpty;
+    }
 
-        if ($this->type instanceof GenericType) {
-            return match (\count($this->type->getVariableTypes())) {
-                2 => $this->type->getVariableTypes()[0],
-                1 => self::int(),
-                default => $defaultCollectionKeyType,
-            };
+    public function getCollectionKeyType(): BuiltinType|UnionType
+    {
+        if (2 <= count($this->getVariableTypes())) {
+            return $this->getVariableTypes()[0];
         }
 
-        return $defaultCollectionKeyType;
+        return $this->isList ? self::int() : self::union(self::int(), self::string());
     }
 
     public function getCollectionValueType(): Type
     {
-        $defaultCollectionValueType = self::mixed();
+        return match (\count($this->getVariableTypes())) {
+            0 => self::mixed(),
+            1 => $this->getVariableTypes()[0],
+            default => $this->getVariableTypes()[1],
+        };
+    }
 
-        if ($this->type instanceof GenericType) {
-            return match (\count($this->type->getVariableTypes())) {
-                2 => $this->type->getVariableTypes()[1],
-                1 => $this->type->getVariableTypes()[0],
-                default => $defaultCollectionValueType,
-            };
-        }
-
-        return $defaultCollectionValueType;
+    public function accepts(Type $type): bool
+    {
     }
 
     public function __toString(): string
     {
-        return (string) $this->type;
-    }
-
-    /**
-     * Proxies all method calls to the original type.
-     *
-     * @param list<mixed> $arguments
-     */
-    public function __call(string $method, array $arguments): mixed
-    {
-        return $this->type->{$method}(...$arguments);
+        return $this->name.$this->renderVariableTypes();
     }
 }

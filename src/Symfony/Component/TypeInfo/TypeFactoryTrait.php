@@ -21,6 +21,7 @@ use Symfony\Component\TypeInfo\Type\NullableTypeInterface;
 use Symfony\Component\TypeInfo\Type\ObjectType;
 use Symfony\Component\TypeInfo\Type\TemplateType;
 use Symfony\Component\TypeInfo\Type\UnionType;
+use Symfony\Component\TypeInfo\Type\WrappingTypeInterface;
 
 /**
  * Helper trait to create any type easily.
@@ -316,5 +317,37 @@ trait TypeFactoryTrait
         }
 
         return Type::union($type, Type::null());
+    }
+
+    /**
+     * Returns the innermost type of wrapped types.
+     *
+     * @template T of Type
+     *
+     * @param WrappingTypeInterface<T>|Type $type
+     * @return (T is WrappingTypeInterface ? T : Type)
+     */
+    public static function unwrap(Type $type): Type
+    {
+        while ($type instanceof WrappingTypeInterface) {
+            $type = $type->getWrappedType();
+        }
+
+        return $type;
+    }
+
+    /**
+     * Infer type from a random value.
+     * @param mixed $value
+     * @return Type
+     */
+    public static function from(mixed $value): Type
+    {
+        return match (true) {
+            \is_resource($value) => self::resource(),
+            \is_object($value) => self::object($value),
+            \is_array($value) => self::collection(self::builtin('array')),
+            default => self::builtin(get_debug_type($value)),
+        };
     }
 }
