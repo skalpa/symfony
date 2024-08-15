@@ -13,6 +13,7 @@ namespace Symfony\Component\TypeInfo\Type;
 
 use Symfony\Component\TypeInfo\Type;
 use Symfony\Component\TypeInfo\TypeIdentifier;
+use Symfony\Component\TypeInfo\TypeIdentifierInterface;
 
 /**
  * @author Mathias Arlaud <mathias.arlaud@gmail.com>
@@ -22,50 +23,43 @@ use Symfony\Component\TypeInfo\TypeIdentifier;
  *
  * @experimental
  */
-class ObjectType extends Type
+class ObjectType extends AtomicType
 {
+    /**
+     * List of classes/interfaces of this class.
+     *
+     * @var array<string>
+     */
+    private readonly array $classNames;
+
     /**
      * @param T $className
      */
-    public function __construct(
-        private readonly string $className,
-    ) {
-    }
-
-    public function getBaseType(): BuiltinType|self
+    public function __construct(string|array $className, Type ... $variableTypes)
     {
-        return $this;
-    }
+        $this->classNames = array_values(array_filter((array) $className));
 
-    public function getTypeIdentifier(): TypeIdentifier
-    {
-        return TypeIdentifier::OBJECT;
-    }
-
-    public function isA(TypeIdentifier|string $subject): bool
-    {
-        if ($subject instanceof TypeIdentifier) {
-            return $this->getTypeIdentifier() === $subject;
-        }
-
-        return is_a($this->getClassName(), $subject, allow_string: true);
+        parent::__construct(TypeIdentifier::OBJECT, $this->classNames[0] ?? '', false, false, ...$variableTypes);
     }
 
     /**
      * @return T
      */
-    public function getClassName(): string
+    public function getClassNames(): array
     {
-        return $this->className;
+        return $this->classNames;
     }
 
-    public function asNonNullable(): static
+    public function accepts(Type $type): bool
     {
-        return $this;
+        return (!isset($this->classNames[0]) || \in_array($this->classNames[0], $type->getClassNames(), true)) &&
+            $this->getTypeIdentifier()->accepts($type->getTypeIdentifier()) &&
+            $this->acceptsVariables($type)
+        ;
     }
 
     public function __toString(): string
     {
-        return $this->className;
+        return ($this->getName() ?: 'object').$this->renderVariableTypes();
     }
 }
