@@ -26,9 +26,9 @@ use Symfony\Component\TypeInfo\TypeIdentifier;
 final class UnionType extends Type
 {
     /**
-     * @use CompositeTypeTrait<T>
+     * @use CompositeType<T>
      */
-    use CompositeTypeTrait;
+    use CompositeType;
 
     public function is(callable $callable): bool
     {

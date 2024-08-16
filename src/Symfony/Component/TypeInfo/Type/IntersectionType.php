@@ -25,9 +25,9 @@ use Symfony\Component\TypeInfo\Type;
 final class IntersectionType extends Type
 {
     /**
-     * @use CompositeTypeTrait<T>
+     * @use CompositeType<T>
      */
-    use CompositeTypeTrait;
+    use CompositeType;
 
     public function is(callable $callable): bool
     {

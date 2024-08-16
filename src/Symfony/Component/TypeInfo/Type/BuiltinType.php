@@ -16,6 +16,8 @@ use Symfony\Component\TypeInfo\Type;
 use Symfony\Component\TypeInfo\TypeIdentifier;
 
 /**
+ * Represents a PHP builtin type.
+ *
  * @author Mathias Arlaud <mathias.arlaud@gmail.com>
  * @author Baptiste Leduc <baptiste.leduc@gmail.com>
  *
@@ -23,40 +25,15 @@ use Symfony\Component\TypeInfo\TypeIdentifier;
  *
  * @experimental
  */
-final class BuiltinType extends Type
+final class BuiltinType extends AtomicType
 {
     /**
      * @param T $typeIdentifier
      */
     public function __construct(
-        private readonly TypeIdentifier $typeIdentifier,
+        TypeIdentifier $typeIdentifier,
     ) {
-    }
-
-    public function getBaseType(): self|ObjectType
-    {
-        return $this;
-    }
-
-    /**
-     * @return T
-     */
-    public function getTypeIdentifier(): TypeIdentifier
-    {
-        return $this->typeIdentifier;
-    }
-
-    public function isA(TypeIdentifier|string $subject): bool
-    {
-        if ($subject instanceof TypeIdentifier) {
-            return $this->getTypeIdentifier() === $subject;
-        }
-
-        try {
-            return TypeIdentifier::from($subject) === $this->getTypeIdentifier();
-        } catch (\ValueError) {
-            return false;
-        }
+        parent::__construct($typeIdentifier, $typeIdentifier->value, TypeIdentifier::NULL === $typeIdentifier || TypeIdentifier::MIXED === $typeIdentifier);
     }
 
     /**
@@ -64,13 +41,13 @@ final class BuiltinType extends Type
      */
     public function asNonNullable(): self|UnionType
     {
-        if (TypeIdentifier::NULL === $this->typeIdentifier) {
+        if (TypeIdentifier::NULL === $this->getTypeIdentifier()) {
             throw new LogicException('"null" cannot be turned as non nullable.');
         }
 
         // "mixed" is an alias of "object|resource|array|string|float|int|bool|null"
         // therefore, its non-nullable version is "object|resource|array|string|float|int|bool"
-        if (TypeIdentifier::MIXED === $this->typeIdentifier) {
+        if (TypeIdentifier::MIXED === $this->getTypeIdentifier()) {
             return new UnionType(
                 new self(TypeIdentifier::OBJECT),
                 new self(TypeIdentifier::RESOURCE),
@@ -83,10 +60,5 @@ final class BuiltinType extends Type
         }
 
         return $this;
-    }
-
-    public function __toString(): string
-    {
-        return $this->typeIdentifier->value;
     }
 }

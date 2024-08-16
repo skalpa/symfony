@@ -19,11 +19,9 @@ use Symfony\Component\TypeInfo\TypeIdentifier;
  * @author Mathias Arlaud <mathias.arlaud@gmail.com>
  * @author Baptiste Leduc <baptiste.leduc@gmail.com>
  *
- * @internal
- *
  * @template T of Type
  */
-trait CompositeTypeTrait
+class CompositeType extends Type
 {
     /**
      * @var list<T>

@@ -19,7 +19,7 @@ namespace Symfony\Component\TypeInfo;
  *
  * @experimental
  */
-enum TypeIdentifier: string
+enum TypeIdentifier: string implements TypeIdentifierInterface
 {
     case ARRAY = 'array';
     case BOOL = 'bool';
@@ -43,5 +43,32 @@ enum TypeIdentifier: string
     public static function values(): array
     {
         return array_column(self::cases(), 'value');
+    }
+
+    public function toString(): string
+    {
+        return $this->value;
+    }
+
+    /**
+     * Implement compatibility between PHP types.
+     *
+     * NEVER is not accepted anywhere (even by itself)
+     * MIXED accepts anything except NEVER
+     * BOOL accepts the 3 boolean types
+     * ITERABLE is an alias for array|Traversable
+     * Other types only accept themselves
+     */
+    public function accepts(TypeIdentifierInterface $other, array $classNames = []): bool
+    {
+        return match ($this) {
+            self::NEVER => false,
+            self::MIXED => self::NEVER !== $other,
+            self::NULL => \in_array($other, [self::NULL, self::VOID], true),
+            self::BOOL => \in_array($other, [self::BOOL, self::FALSE, self::TRUE], true),
+            self::OBJECT => self::OBJECT === $other,
+            self::ITERABLE => self::ARRAY === $other || self::OBJECT === $other && \in_array(\Traversable::class, $classNames, true),
+            default => $this === $other,
+        };
     }
 }

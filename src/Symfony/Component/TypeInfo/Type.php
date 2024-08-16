@@ -12,8 +12,6 @@
 namespace Symfony\Component\TypeInfo;
 
 use Symfony\Component\TypeInfo\Exception\LogicException;
-use Symfony\Component\TypeInfo\Type\BuiltinType;
-use Symfony\Component\TypeInfo\Type\ObjectType;
 
 /**
  * @author Mathias Arlaud <mathias.arlaud@gmail.com>
@@ -25,27 +23,18 @@ abstract class Type implements \Stringable
 {
     use TypeFactoryTrait;
 
-    abstract public function getBaseType(): BuiltinType|ObjectType;
-
-    /**
-     * @param TypeIdentifier|class-string $subject
-     */
-    abstract public function isA(TypeIdentifier|string $subject): bool;
+    abstract public function getTypeIdentifier(): TypeIdentifierInterface;
 
     abstract public function asNonNullable(): self;
 
-    /**
-     * @param callable(Type): bool $callable
-     */
-    public function is(callable $callable): bool
-    {
-        return $callable($this);
-    }
+    abstract public function isNullable(): bool;
 
-    public function isNullable(): bool
-    {
-        return $this->is(fn (Type $t): bool => $t->isA(TypeIdentifier::NULL) || $t->isA(TypeIdentifier::MIXED));
-    }
+    /**
+     * Get all the classes/interfaces implemented by an "object" type.
+     */
+    abstract public function getClassNames(): array;
+
+    abstract public function accepts(Type $type): bool;
 
     /**
      * Graceful fallback for unexisting methods.

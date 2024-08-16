@@ -14,6 +14,7 @@ namespace Symfony\Component\TypeInfo\Type;
 use Symfony\Component\TypeInfo\Exception\InvalidArgumentException;
 use Symfony\Component\TypeInfo\Type;
 use Symfony\Component\TypeInfo\TypeIdentifier;
+use Symfony\Component\TypeInfo\TypeIdentifierInterface;
 
 /**
  * Represents a key/value collection type.
@@ -27,15 +28,52 @@ use Symfony\Component\TypeInfo\TypeIdentifier;
  *
  * @experimental
  */
-final class CollectionType extends Type
+final class CollectionType extends AtomicType
 {
+    /**
+     * @var array<string>
+     */
+    private readonly array $classNames;
+
     /**
      * @param T $type
      */
     public function __construct(
-        private readonly BuiltinType|ObjectType|GenericType $type,
+        private readonly TypeIdentifier|string $type,
         private readonly bool $isList = false,
+        private readonly bool $allowEmpty = false,
+        Type ...$variableTypes,
     ) {
+        if ('' === $type || $type instanceof TypeIdentifier && !\in_array($type, [TypeIdentifier::ARRAY, TypeIdentifier::ITERABLE], true)) {
+            throw new InvalidArgumentException(\sprintf('Invalid collection type. Expected array,iterable or class-string, got "%s".', $type->value));
+        }
+
+        parent::__construct(
+            $type instanceof TypeIdentifier ? $type : TypeIdentifier::OBJECT,
+            $type instanceof TypeIdentifier ? $type->toString() : $type,
+            false,
+            false,
+            ...$variableTypes,
+        );
+
+        if (!$isList && 2 <= count($variableTypes)) {
+            $keyType = $variableTypes[0];
+            if (!$keyType instanceof UnionType) {
+                return $keyType instanceof AtomicType && \in_array($keyType->getTypeIdentifier(), [TypeIdentifier::INT, TypeIdentifier::STRING], true);
+            }
+            $typeIdentifiers = array_unique(array_map(fn(Type $type): TypeIdentifier => $type->getTypeIdentifier(), $keyType->getTypes()));
+
+            $isValid =
+                ($keyType instanceof AtomicType && \in_array($keyType->getTypeIdentifier(), [TypeIdentifier::INT, TypeIdentifier::STRING], true)) ||
+                ($keyType instanceof UnionType && 2 === count($keyType->getTypes()) && 'int|string' === (string) $keyType)
+            ;
+            if (!$isValid) {
+                throw new InvalidArgumentException(\sprintf('"%s" is not a valid list key type.', (string) $keyType));
+            }
+        }
+
+
+
         if ($this->isList()) {
             $keyType = $this->getCollectionKeyType();
 
@@ -103,11 +141,6 @@ final class CollectionType extends Type
         return $defaultCollectionValueType;
     }
 
-    public function __toString(): string
-    {
-        return (string) $this->type;
-    }
-
     /**
      * Proxies all method calls to the original type.
      *
@@ -116,5 +149,10 @@ final class CollectionType extends Type
     public function __call(string $method, array $arguments): mixed
     {
         return $this->type->{$method}(...$arguments);
+    }
+
+    private function validateKeyType(Type $type): void
+    {
+
     }
 }
